@@ -14,6 +14,9 @@ bytes = "1.0"
 chrono = "0.4"
 thiserror = "1.0"
 crc32fast = "1.2"
+anyhow = "1.0"
+structopt = "0.3.26"
+path-absolutize = "3.0.14"
 
 [dev-dependencies]
 zip = "0.6.3"

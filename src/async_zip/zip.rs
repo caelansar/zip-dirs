@@ -24,11 +24,6 @@ where
     I: IntoIterator<Item = (P, u64)>,
     P: AsRef<Path>,
 {
-    // let mut size: u64 = DIRECTORY_END_SIZE as u64;
-    // for (path, sz) in sizes.into_iter() {
-    //     size += (path_to_file_name(&path))?.len() as u64 + FILE_HEADER_SIZE as u64 + sz + DATA_DESCRIPTOR_SIZE as u64;
-    // }
-    // Ok(size)
     sizes
         .into_iter()
         .try_fold(DIRECTORY_END_SIZE as u64, |total, (path, sz)| {
