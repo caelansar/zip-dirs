@@ -7,7 +7,12 @@ mod option;
 
 use futures::StreamExt;
 use option::{Opt, ZipType};
-use std::path::{Path, PathBuf};
+use path_absolutize::*;
+use std::{
+    borrow::Cow,
+    env,
+    path::{Path, PathBuf},
+};
 use structopt::StructOpt;
 use tokio::{
     fs::{read_dir, File},
@@ -28,11 +33,11 @@ async fn main() -> Result<()> {
     }
 
     println!(
-        "input directory is: {:?}, zip_type is: {:?}",
-        dir, opt.zip_type
+        "input directory is: {:?}, zip_type is: {:?}, exclude_dir is: {:?}",
+        dir, opt.zip_type, opt.exclude_dir
     );
 
-    zip_dir(&dir, opt.zip_type).await
+    zip_dir(&dir, &*opt.exclude_dir, opt.zip_type).await
 }
 
 struct Zipper;
@@ -143,13 +148,16 @@ async fn zip(dir: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-async fn zip_dir(dir: impl AsRef<Path>, zip_type: ZipType) -> Result<()> {
-    let mut entries = read_dir(dir.as_ref()).await?;
+async fn zip_dir(dir: &Path, exclude: &Vec<PathBuf>, zip_type: ZipType) -> Result<()> {
+    let mut entries = read_dir(dir).await?;
     while let Some(f) = entries.next_entry().await? {
         let filename = f.file_name().into_string().unwrap();
         let directory = f.path();
         // ignore hidden dir and excluded dir
-        if !filename.starts_with(".") && directory.is_dir() {
+        if !filename.starts_with(".")
+            && directory.is_dir()
+            && !is_exclude(Some(dir), exclude, directory.as_path())
+        {
             println!("filename: {}, dir: {:?}", filename, directory);
             match zip_type {
                 ZipType::Zipper => Zipper::zip(directory).await?,
@@ -181,23 +189,80 @@ async fn zip_dir(dir: impl AsRef<Path>, zip_type: ZipType) -> Result<()> {
     //     .await;
 }
 
+#[allow(deprecated)]
+fn absolute_path<T: AsRef<Path>>(cwd: Option<T>, path: &Path) -> Cow<'_, Path> {
+    let home = env::home_dir().unwrap();
+
+    if path.starts_with("~/") {
+        let path = path.strip_prefix("~/").unwrap();
+        path.absolutize_virtually(home).unwrap()
+    } else {
+        if let Some(cwd) = cwd {
+            path.absolutize_from(&cwd.as_ref().absolutize().unwrap())
+                .unwrap()
+        } else {
+            path.absolutize_virtually(home).unwrap()
+        }
+    }
+}
+
+fn is_exclude(cwd: Option<&Path>, exclude: &Vec<PathBuf>, dir: impl AsRef<Path>) -> bool {
+    let exclude: Vec<Cow<Path>> = exclude
+        .iter()
+        .map(|path| absolute_path(cwd, &path))
+        .collect();
+
+    let absolute_dir = absolute_path(cwd, dir.as_ref());
+
+    println!("{:?}, dir {:?}", exclude, absolute_dir);
+
+    exclude.iter().find(|x| **x == absolute_dir).is_some()
+}
+
 #[cfg(test)]
 mod test {
-    use path_absolutize::*;
-    use std::path::Path;
+    use std::{borrow::Borrow, path::Path};
+
+    use path_absolutize::Absolutize;
+
+    use crate::is_exclude;
 
     #[test]
-    fn test_path() {
+    fn absolutize_from_should_work() {
+        let path1 = Path::new("src/async_zip");
+        let path = path1.absolutize_from(Path::new("/ss/bb")).unwrap();
+        assert_eq!(
+            Path::new("/ss/bb/src/async_zip"),
+            Borrow::<Path>::borrow(&path)
+        );
+
+        let path1 = Path::new("/src/async_zip");
+        let path = path1.absolutize_from(Path::new("/ss/bb")).unwrap();
+        assert_eq!(Path::new("/src/async_zip"), Borrow::<Path>::borrow(&path))
+    }
+
+    #[test]
+    fn is_exclude_should_work() {
+        let path1 = Path::new("./src/async_zip");
         let path2 = Path::new("~/Rust/zip_dirs/src/async_zip");
-        // let path1 = Path::new("./src/async_zip");
-        //
-        println!("{:?}", path2.iter().last());
+        let path3 = Path::new("../async_zip");
+        let path4 = Path::new("./src/async_zip");
 
-        // let pb1 = path1.absolutize().unwrap();
-        let pb2 = path2.absolutize().unwrap();
+        let ok = is_exclude(
+            Some(Path::new(".").as_ref()),
+            &vec![path1.to_path_buf()],
+            path2,
+        );
+        assert!(ok);
 
-        // println!("{}", pb1.to_str().unwrap());
-        println!("{}", pb2.to_str().unwrap());
-        // println!("{}", pb1 == pb2);
+        let ok = is_exclude(
+            Some(Path::new(".").as_ref()),
+            &vec![path1.to_path_buf()],
+            path3,
+        );
+        assert!(!ok);
+
+        let ok = is_exclude(None, &vec![path1.to_path_buf()], path4);
+        assert!(ok);
     }
 }
