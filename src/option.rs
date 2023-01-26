@@ -13,7 +13,7 @@ pub(crate) struct Opt {
     pub(crate) zip_type: ZipType,
 
     /// Exclude dir
-    #[structopt(short = "e", long = "exclude-dir")]
+    #[structopt(short = "e", long = "exclude-dir", default_value = "")]
     pub(crate) exclude_dir: Dirs,
 }
 
