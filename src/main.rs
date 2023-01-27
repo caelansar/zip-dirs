@@ -17,7 +17,7 @@ use structopt::StructOpt;
 use tokio::{
     fs::{read_dir, File},
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::mpsc::{channel, Sender},
+    sync::mpsc::{channel, Receiver, Sender},
 };
 
 use ::async_zip as az;
@@ -62,18 +62,21 @@ async fn zip1(dir: impl AsRef<Path>) -> Result<()> {
         .await
         .unwrap();
 
-    let writer = az::write::ZipFileWriter::new(archive);
+    let mut writer = az::write::ZipFileWriter::new(archive);
 
-    handle_directory(dir, writer).await
+    let mut rx = handle_directory(dir).await?;
+
+    while let Some(data) = rx.recv().await {
+        let builder = az::ZipEntryBuilder::new(data.0, az::Compression::Deflate);
+        writer.write_entry_whole(builder, &data.1).await.unwrap();
+    }
+    Ok(())
 }
 
-async fn handle_directory(
-    input_path: impl AsRef<Path>,
-    mut writer: az::write::ZipFileWriter<File>,
-) -> Result<()> {
+async fn handle_directory(input_path: impl AsRef<Path>) -> Result<Receiver<(String, Vec<u8>)>> {
     let entries = walk_directory(input_path.as_ref().into()).await?;
 
-    let (tx, mut rx) = channel(1024);
+    let (tx, rx) = channel(1024);
 
     for entry_path_buf in entries {
         let tx = tx.clone();
@@ -82,14 +85,8 @@ async fn handle_directory(
             write_entry(entry_path_buf, tx).await.unwrap();
         });
     }
-    drop(tx);
 
-    while let Some(data) = rx.recv().await {
-        let builder = az::ZipEntryBuilder::new(data.0, az::Compression::Deflate);
-        writer.write_entry_whole(builder, &data.1).await.unwrap();
-    }
-
-    Ok(())
+    Ok(rx)
 }
 
 async fn write_entry(input_path: impl AsRef<Path>, tx: Sender<(String, Vec<u8>)>) -> Result<()> {
