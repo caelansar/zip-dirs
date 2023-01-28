@@ -9,7 +9,7 @@ pub(crate) struct Opt {
     pub(crate) input_dir: PathBuf,
 
     /// Zip type, optional value is zip or zipper
-    #[structopt(short, parse(try_from_str = parse_zip_type), default_value = "zipper")]
+    #[structopt(short, parse(try_from_str = parse_zip_type), default_value = "zip")]
     pub(crate) zip_type: ZipType,
 
     /// Exclude dir
@@ -19,15 +19,17 @@ pub(crate) struct Opt {
 
 #[derive(Debug)]
 pub(crate) enum ZipType {
-    Zip,
+    AsyncZip,
     Zipper,
+    Zip,
 }
 
 fn parse_zip_type(src: &str) -> Result<ZipType, anyhow::Error> {
     match src {
+        "async_zip" => Ok(ZipType::AsyncZip),
+        "self_async_zip" => Ok(ZipType::Zipper),
         "zip" => Ok(ZipType::Zip),
-        "zipper" => Ok(ZipType::Zipper),
-        _ => Err(anyhow::anyhow!("Only support zip/zipper")),
+        _ => Err(anyhow::anyhow!("Not support")),
     }
 }
 

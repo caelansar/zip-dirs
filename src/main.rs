@@ -8,6 +8,7 @@ mod option;
 use futures::StreamExt;
 use option::{Opt, ZipType};
 use path_absolutize::*;
+use std::fs::File as StdFile;
 use std::{
     borrow::Cow,
     env,
@@ -19,6 +20,8 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::mpsc::{channel, Receiver, Sender},
 };
+use zip::ZipWriter;
+use zip_extensions::write::ZipWriterExtensions;
 
 use ::async_zip as az;
 use anyhow::{anyhow, bail, Result};
@@ -42,6 +45,8 @@ async fn main() -> Result<()> {
 
 struct Zipper;
 
+struct AsyncZip;
+
 struct Zip;
 
 impl Zipper {
@@ -50,9 +55,21 @@ impl Zipper {
     }
 }
 
-impl Zip {
+impl AsyncZip {
     async fn zip(path: impl AsRef<Path>) -> Result<()> {
         zip1(path).await
+    }
+}
+
+impl Zip {
+    async fn zip(path: impl AsRef<Path>) -> Result<()> {
+        let path = path.as_ref().to_owned().clone();
+        tokio::task::spawn_blocking(move || {
+            let file = StdFile::create(path.with_extension("zip")).unwrap();
+            let mut zip = ZipWriter::new(file);
+            zip.create_from_directory(&path.to_path_buf()).unwrap();
+        });
+        Ok(())
     }
 }
 
@@ -158,6 +175,7 @@ async fn zip_dir(dir: &Path, exclude: &Vec<PathBuf>, zip_type: ZipType) -> Resul
             println!("filename: {}, dir: {:?}", filename, directory);
             match zip_type {
                 ZipType::Zipper => Zipper::zip(directory).await?,
+                ZipType::AsyncZip => AsyncZip::zip(directory).await?,
                 ZipType::Zip => Zip::zip(directory).await?,
             }
         }
