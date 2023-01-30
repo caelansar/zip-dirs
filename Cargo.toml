@@ -19,5 +19,6 @@ structopt = "0.3.26"
 path-absolutize = "3.0.14"
 zip = "0.5"
 zip-extensions = "0.6.1"
+tokio-stream = { version = "0.1.11", features = ["fs"] }
 
 [dev-dependencies]

@@ -48,8 +48,12 @@ impl std::str::FromStr for Dirs {
     type Err = Box<dyn std::error::Error>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Dirs(
-            s.split(",").map(|x| x.trim().to_owned().into()).collect(),
-        ))
+        if s.len() == 0 {
+            Ok(Dirs(Vec::new()))
+        } else {
+            Ok(Dirs(
+                s.split(",").map(|x| x.trim().to_owned().into()).collect(),
+            ))
+        }
     }
 }
