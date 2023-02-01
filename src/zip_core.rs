@@ -3,7 +3,7 @@ use futures::{Future, Stream, StreamExt};
 use std::fs::File as StdFile;
 use std::io;
 use std::path::{Path, PathBuf};
-use tokio::fs::{read_dir, DirEntry, ReadDir};
+use tokio::fs::{read_dir, DirEntry};
 use tokio::io::AsyncWriteExt;
 use tokio::{
     fs::File,
@@ -21,12 +21,12 @@ pub trait ZipCore {
     async fn zip_entry(&self, path: impl AsRef<Path>) -> Result<()>;
 }
 
-type ZipStream = impl Stream<Item = io::Result<DirEntry>> + Unpin;
-
 pub trait ZipEngine: ZipCore {
+    type ZipStream: Stream<Item = io::Result<DirEntry>> + Unpin;
+
     fn skip(&self, dir: DirEntry) -> bool;
 
-    async fn get_stream(&self) -> ZipStream;
+    async fn get_stream(&self) -> Self::ZipStream;
 
     async fn do_zip(&self) -> Result<()> {
         let mut stream = self.get_stream().await;
@@ -70,7 +70,9 @@ impl<T: ZipCore> ZipCore for DirsZipEngine<T> {
 }
 
 impl<T: ZipCore> ZipEngine for DirsZipEngine<T> {
-    async fn get_stream(&self) -> ZipStream {
+    type ZipStream = ReadDirStream;
+
+    async fn get_stream(&self) -> Self::ZipStream {
         ReadDirStream::new(read_dir(&self.path).await.unwrap())
     }
 

@@ -43,10 +43,7 @@ async fn main() -> Result<()> {
     let excluded = opt.exclude_dir.clone();
 
     match opt.zip_type {
-        ZipType::Zip => {
-            println!("ok");
-            DirsZipEngine::new(Zip {}, &dir, excluded).do_zip().await
-        }
+        ZipType::Zip => DirsZipEngine::new(Zip {}, &dir, excluded).do_zip().await,
         ZipType::Zipper => DirsZipEngine::new(Zipper {}, &dir, excluded).do_zip().await,
         ZipType::AsyncZip => {
             DirsZipEngine::new(AsyncZip {}, &dir, excluded)
